@@ -82,10 +82,11 @@
 require 'fileutils'
 require 'open3'
 
+
 class ExternalsProcessor
 
   def initialize(options = {})
-    @parent, @externals_url = options.values_at(:parent, :externals_url)
+    @parent, @externals_url, @rev = options.values_at(:parent, :externals_url, :rev)
     unless @parent
       @warnings = {}
       @topdir = Dir.getwd
@@ -120,12 +121,21 @@ class ExternalsProcessor
 
 
   def process_externals(externals)
-    externals.each do |dir, url|
+    # externals is an array of hashes 
+    # [ {:dir=>dir, :url=>url, :rev=>revision }, ... ]
+    externals.each do |ext|
+      dir = ext[:dir]
+      url = ext[:url]
+
+      #puts "Dir=#{dir} URL=#{url} rev=#{ext[:rev]}"
+
       raise "Error: svn:externals cycle detected: '#{url}'" if known_url?(url)
       raise "Error: Unable to find or mkdir '#{dir}'" unless File.exist?(dir) || FileUtils.mkpath(dir)
       raise "Error: Expected '#{dir}' to be a directory" unless File.directory?(dir)
 
-      Dir.chdir(dir) { self.class.new(:parent => self, :externals_url => url).run }
+      Dir.chdir(dir) { self.class.new(:parent => self, 
+        :externals_url => url,
+        :rev => ext[:rev]).run }
       update_exclude_file_with_paths([dir]) unless quick?
     end
   end
@@ -174,7 +184,8 @@ class ExternalsProcessor
       # first-time clone
       raise "Error: Missing externals URL for '#{Dir.getwd}'" unless @externals_url
       no_history_option = no_history? ? '-r HEAD' : ''
-      shell("git svn clone #{no_history_option} #@externals_url .")
+      rev_option = @rev ? "-r #{@rev}" : ''
+      shell("git svn clone #{no_history_option} #{rev_option} #@externals_url .")
     elsif contents == ['.git']
       # interrupted clone, restart with fetch
       shell('git svn fetch')
@@ -245,15 +256,67 @@ class ExternalsProcessor
     end
   end
   
+  def parse_externals(input)
+    externals = []
+    # externals should contain an array of 
+    # hashes with local_dir, url and rev elements
+    input.each { |l|
+      # TODO: get rid of empty lines, comments and '# /'
+
+      rev = nil
+      # strip the dash rev
+      if ! l.grep(/-r\s*(\d+)\b/i).empty? then
+        rev = $~[1] 
+        l.sub!($~[0], '')
+      end
+      # strip the peg revision
+      if ! l.grep(/@(\d+)\b/i).empty? then
+        rev = $~[1]
+        l.sub!($~[0], '')
+      end
+
+      local_dir = ""
+      url = ""
+
+      # versioned_externals = l.grep(/-r\d+\b/i)
+      #     unless versioned_externals.empty?
+      #       print "Error: Found external(s) pegged to fixed revision: '#{versioned_externals.join ', '}' in '#{Dir.getwd}', don't know how to handle this."
+      #     end
+
+      if ! l.grep(%r%^/(\S+)\s+(\S+)%).empty? then
+        url = resolve_url($~[1], @parent, @repo)
+        externals += [ { :dir=> $~[2], :url=> url, :rev=> rev } ]
+      end
+    }
+
+    return externals
+  end
+
+  def resolve_url(url, parent_url, repo)
+    # certain special characters in the externals url need to be expanded
+    # replace ^ with repository url
+    url.sub!(/^\^/, repo)
+    # TODO: replace .. with parent dir
+    # TODO: replace // with scheme://
+    # TODO: replace / with server
+    return url
+  end
+  
   
   def read_externals
     return read_externals_quick if quick?
-    externals = shell('git svn show-externals').reject { |x| x =~ %r%^\s*/?\s*#% }
-    versioned_externals = externals.grep(/-r\d+\b/i)
-    unless versioned_externals.empty?
-      raise "Error: Found external(s) pegged to fixed revision: '#{versioned_externals.join ', '}' in '#{Dir.getwd}', don't know how to handle this."
-    end
-    externals.grep(%r%^/(\S+)\s+(\S+)%) { $~[1,2] }
+    
+    @repo = svn_info_for_current_dir['Repository Root']
+    externals = parse_externals(shell('git svn show-externals'))
+    
+    # externals = shell('git svn show-externals').reject { |x| x =~ %r%^\s*/?\s*#% }
+    # versioned_externals = externals.grep(/-r\d+\b/i)
+    # unless versioned_externals.empty?
+    #   raise "Error: Found external(s) pegged to fixed revision: '#{versioned_externals.join ', '}' in '#{Dir.getwd}', don't know how to handle this."
+    # end
+    # externals.grep(%r%^/(\S+)\s+(\S+)%) { { :dir => $~[1], :url => $~[2] } }
+    
+    return externals
   end
 
 
