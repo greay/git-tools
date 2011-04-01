@@ -195,11 +195,12 @@ class ExternalsProcessor
       check_working_copy_git
       check_working_copy_dirty
       check_working_copy_url
-      check_working_copy_branch
+      # only check on the branch if we're not pegged to a revision
+      check_working_copy_branch unless @rev
 
       # All sanity checks OK, perform the update
       output = shell("git svn rebase", true, [/is up to date/, /First, rewinding/, /Fast-forwarded master/, /W: -empty_dir:/])
-      if output.include?('Current branch master is up to date.')
+      if @rev.nil? and output.include?('Current branch master is up to date.')
         restore_working_copy_branch
       end
     end
