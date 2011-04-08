@@ -126,8 +126,7 @@ class ExternalsProcessor
     externals.each do |ext|
       dir = ext[:dir]
       url = ext[:url]
-
-      puts "DEBUG: Dir=#{dir} URL=#{url} rev=#{ext[:rev]}"
+      #puts "DEBUG: Dir=#{dir} URL=#{url} rev=#{ext[:rev]}"
 
       raise "Error: svn:externals cycle detected: '#{url}'" if known_url?(url)
       raise "Error: Unable to find or mkdir '#{dir}'" unless File.exist?(dir) || FileUtils.mkpath(dir)
@@ -280,7 +279,7 @@ class ExternalsProcessor
     end
   end
   
-  def parse_externals(input)
+  def parse_externals(input, repo)
     externals = []
     # externals should contain an array of 
     # hashes with local_dir, url and rev elements
@@ -299,16 +298,8 @@ class ExternalsProcessor
         l.sub!($~[0], '')
       end
 
-      local_dir = ""
-      url = ""
-
-      # versioned_externals = l.grep(/-r\d+\b/i)
-      #     unless versioned_externals.empty?
-      #       print "Error: Found external(s) pegged to fixed revision: '#{versioned_externals.join ', '}' in '#{Dir.getwd}', don't know how to handle this."
-      #     end
-
-      if ! l.grep(%r%^/(\S+)\s+(\S+)%).empty? then
-        url = resolve_url($~[1], @parent, @repo)
+      if m = %r|^/\s*(\S+)\s+(\S+)| then
+        url = resolve_url(m[1], "DUMMY", repo)
         externals += [ { :dir=> $~[2], :url=> url, :rev=> rev } ]
       end
     }
@@ -316,13 +307,15 @@ class ExternalsProcessor
     return externals
   end
 
-  def resolve_url(url, parent_url, repo)
+  def resolve_url(partial_url, parent_url, repo)
     # certain special characters in the externals url need to be expanded
     # replace ^ with repository url
-    url.sub!(/^\^/, repo)
+    url = partial_url.sub(/^\^/, repo)
     # TODO: replace .. with parent dir
-    # TODO: replace // with scheme://
-    # TODO: replace / with server
+    # TODO: replace // with repo scheme://
+    # parsed_url = URI.parse(repo)
+    # sch = parsed_url.scheme
+    # TODO: replace / with repo server
     return url
   end
   
@@ -478,5 +471,8 @@ end
 
 # ----------------------
 
-ENV['PATH'] = "/opt/local/bin:#{ENV['PATH']}"
-exit ExternalsProcessor.new(:quick => ARGV.delete('-q'), :no_history => ARGV.delete('--no-history'), :verbose => ARGV.delete('-v')).run
+if __FILE__ == $0
+  ENV['PATH'] = "/opt/local/bin:#{ENV['PATH']}"
+  exit ExternalsProcessor.new(:quick => ARGV.delete('-q'), 
+    :no_history => ARGV.delete('--no-history'), 
+    :verbose => ARGV.delete('-v')).run
