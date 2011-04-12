@@ -83,6 +83,47 @@ require 'fileutils'
 require 'open3'
 
 
+def parse_externals(input, repo)
+  externals = []
+  # externals should contain an array of 
+  # hashes with local_dir, url and rev elements
+  input.each { |l|
+    # TODO: get rid of empty lines, comments and '# /'
+
+    rev = nil
+    # strip the dash rev
+    if ! l.grep(/-r\s*(\d+)\b/i).empty? then
+      rev = $~[1] 
+      l.sub!($~[0], '')
+    end
+    # strip the peg revision
+    if ! l.grep(/@(\d+)\b/i).empty? then
+      rev = $~[1]
+      l.sub!($~[0], '')
+    end
+
+    if m = l.match(%r|^/\s*(\S+)\s+(\S+)|) then
+      url = resolve_url(m[1], "DUMMY", repo)
+      externals += [ { :dir=> $~[2], :url=> url, :rev=> rev } ]
+    end
+  }
+
+  return externals
+end
+
+def resolve_url(partial_url, parent_url, repo)
+  # certain special characters in the externals url need to be expanded
+  # replace ^ with repository url
+  url = partial_url.sub(/^\^/, repo)
+  # TODO: replace .. with parent dir
+  # TODO: replace // with repo scheme://
+  # parsed_url = URI.parse(repo)
+  # sch = parsed_url.scheme
+  # TODO: replace / with repo server
+  return url
+end
+
+
 class ExternalsProcessor
 
   def initialize(options = {})
@@ -279,46 +320,7 @@ class ExternalsProcessor
     end
   end
   
-  def parse_externals(input, repo)
-    externals = []
-    # externals should contain an array of 
-    # hashes with local_dir, url and rev elements
-    input.each { |l|
-      # TODO: get rid of empty lines, comments and '# /'
-
-      rev = nil
-      # strip the dash rev
-      if ! l.grep(/-r\s*(\d+)\b/i).empty? then
-        rev = $~[1] 
-        l.sub!($~[0], '')
-      end
-      # strip the peg revision
-      if ! l.grep(/@(\d+)\b/i).empty? then
-        rev = $~[1]
-        l.sub!($~[0], '')
-      end
-
-      if m = %r|^/\s*(\S+)\s+(\S+)| then
-        url = resolve_url(m[1], "DUMMY", repo)
-        externals += [ { :dir=> $~[2], :url=> url, :rev=> rev } ]
-      end
-    }
-
-    return externals
-  end
-
-  def resolve_url(partial_url, parent_url, repo)
-    # certain special characters in the externals url need to be expanded
-    # replace ^ with repository url
-    url = partial_url.sub(/^\^/, repo)
-    # TODO: replace .. with parent dir
-    # TODO: replace // with repo scheme://
-    # parsed_url = URI.parse(repo)
-    # sch = parsed_url.scheme
-    # TODO: replace / with repo server
-    return url
-  end
-  
+  # moved parse_externals, resolve_url outside class
   
   def read_externals
     return read_externals_quick if quick?
@@ -476,3 +478,4 @@ if __FILE__ == $0
   exit ExternalsProcessor.new(:quick => ARGV.delete('-q'), 
     :no_history => ARGV.delete('--no-history'), 
     :verbose => ARGV.delete('-v')).run
+end

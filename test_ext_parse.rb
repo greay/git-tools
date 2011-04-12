@@ -1,7 +1,6 @@
 require 'test/unit'
 
-require 'git-ext-parse'
-
+require 'git-svn-clone-externals'
 
 # no need to support old style (1.4) externals
 #OLD_INPUT = "# /
