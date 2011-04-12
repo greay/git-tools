@@ -49,8 +49,8 @@ class TestExtParse < Test::Unit::TestCase
   def test_inputs
     TEST_CASES.each do |tc|
       result = parse_externals(tc[:input], tc[:repo])
-      puts tc[:input]
-      puts result.length, result
+      #puts tc[:input]
+      #puts result.length, result
       assert_equal(1, result.length)
       assert_equal(tc[:exp_url], result[0][:url])
       assert_equal(tc[:exp_dir], result[0][:dir])
@@ -60,7 +60,7 @@ class TestExtParse < Test::Unit::TestCase
 
   def test_basic_input
     result = parse_externals(INPUT, "DUMMY")
-    puts result
+    #puts result
     assert_equal(3, result.length)
     # TODO: check output!
     
