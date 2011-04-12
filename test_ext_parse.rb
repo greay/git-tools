@@ -23,7 +23,7 @@ TEST_CASES = [
 
   { :input => "/-r 3001 ^/trunk/tools/A  ext-src/A", 
     :repo => "https://example.com/svn",
-    :exp_url => "https://example.com/svn/trunk/tools", 
+    :exp_url => "https://example.com/svn/trunk/tools/A", 
     :exp_dir => "ext-src/A", :exp_rev => "3001" },
 ]
 
