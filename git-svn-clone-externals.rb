@@ -331,46 +331,49 @@ class ExternalsProcessor
 
   # this should really be using $? to check the exit status,
   # but it seems that's not available when using open3()
-  def shell(cmd, echo_stdout = false, echo_filter = [])
+  def shell(cmd, echo_stdout = true, echo_filter = [])
+    puts cmd
     t1 = Time.now
 
     output = []
-    done = false
-    while !done do
-      done = true
-      Open3.popen3(cmd) do |stdin, stdout, stderr|
-        stdin.close
+    # done = false
+    # while !done do
+    #   Open3.popen3(cmd) do |stdin, stdout, stderr|
+    #     stdin.close
+    #   
+    #     loop do
+    #       ready = select([stdout, stderr])
+    #       readable = ready[0]
+    #       if stdout.eof?
+    #         error = stderr.readlines
+    #         if error.join('') =~ /SSL negotiation failed/
+    #           done = false
+    #           puts "shell command #{cmd} failed, retrying..."
+    #           if cmd =~ /git svn clone/
+    #             cmd_new = 'git svn fetch'
+    #             puts "replacing shell command with '#{cmd_new}'"
+    #             cmd = cmd_new
+    #           end
+    #         end
+    #         break
+    #       end
+    #       readable.each do |io|
+    #         data = io.gets
+    #         next unless data
+    #         if io == stderr
+    #           print data if (verbose? || !echo_filter.find { |x| data =~ x })
+    #         else
+    #           print data if (verbose? || (echo_stdout && ! echo_filter.find { |x| data =~ x }))
+    #           output << data
+    #         end
+    #       end
+    #     end
+    #   end
+    # end
 
-        loop do
-          ready = select([stdout, stderr])
-          readable = ready[0]
-          if stdout.eof?
-            error = stderr.readlines
-            if error.join('') =~ /SSL negotiation failed/
-              done = false
-              puts "shell command #{cmd} failed, retrying..."
-              if cmd =~ /git svn clone/
-                cmd_new = 'git svn fetch'
-                puts "replacing shell command with '#{cmd_new}'"
-                cmd = cmd_new
-              end
-            end
-            break
-          end
-          readable.each do |io|
-            data = io.gets
-            next unless data
-            if io == stderr
-              print data if (verbose? || !echo_filter.find { |x| data =~ x })
-            else
-              print data if (verbose? || (echo_stdout && ! echo_filter.find { |x| data =~ x }))
-              output << data
-            end
-          end
-        end
-      end
-    end
-
+    out = `#{cmd}`
+    # raise "error executing '#{cmd}' - exit #{$?.exitstatus}" unless $?.exitstatus == 0
+    output = out.lines.to_a
 
     output.each { |x| x.chomp! }
 
