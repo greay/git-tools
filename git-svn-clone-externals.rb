@@ -85,7 +85,7 @@ require 'open3'
 class ExternalsProcessor
 
   def initialize(options = {})
-    @parent, @externals_url = options.values_at(:parent, :externals_url)
+    @parent, @externals_url, @revision = options.values_at(:parent, :externals_url, :revision)
     unless @parent
       @warnings = {}
       @topdir = Dir.getwd
@@ -120,12 +120,15 @@ class ExternalsProcessor
 
 
   def process_externals(externals)
-    externals.each do |dir, url|
+    externals.each do |match|
+      dir = match[1]
+      rev = match[3]
+      url = match[4]
       raise "Error: svn:externals cycle detected: '#{url}'" if known_url?(url)
       raise "Error: Unable to find or mkdir '#{dir}'" unless File.exist?(dir) || FileUtils.mkpath(dir)
       raise "Error: Expected '#{dir}' to be a directory" unless File.directory?(dir)
 
-      Dir.chdir(dir) { self.class.new(:parent => self, :externals_url => url).run }
+      Dir.chdir(dir) { self.class.new(:parent => self, :externals_url => url, :revision => rev).run }
       update_exclude_file_with_paths([dir]) unless quick?
     end
   end
@@ -140,7 +143,7 @@ class ExternalsProcessor
 
 
   def find_non_externals_sandboxes(externals)
-    externals_dirs = externals.map { |x| x[0] }
+    externals_dirs = externals.collect { |match| match[1] }
     sandboxes = find_git_svn_sandboxes_in_current_dir
     non_externals_sandboxes = sandboxes.select { |sandbox| externals_dirs.select { |external| sandbox.index(external) == 0}.empty? }
     return if non_externals_sandboxes.empty?
@@ -168,13 +171,17 @@ class ExternalsProcessor
   def update_current_dir
     contents = Dir.entries('.').reject { |x| x =~ /^(?:\.+|\.DS_Store)$/ }
     relative_dir = topdir_relative_path(Dir.getwd)
-    puts "updating #{relative_dir}"
+    puts "updating #{Dir.getwd}"
 
     if contents.empty?
       # first-time clone
       raise "Error: Missing externals URL for '#{Dir.getwd}'" unless @externals_url
-      no_history_option = no_history? ? '-r HEAD' : ''
-      shell("git svn clone #{no_history_option} #@externals_url .")
+      revision_option = if no_history? then
+	 			'-r HEAD'
+			else
+				@revision ? "-r #{@revision}" : ''
+			end
+      shell("git svn clone #{revision_option} #@externals_url .")
     elsif contents == ['.git']
       # interrupted clone, restart with fetch
       shell('git svn fetch')
@@ -247,21 +254,9 @@ class ExternalsProcessor
   
   
   def read_externals
-    return read_externals_quick if quick?
-    externals = shell('git svn show-externals').reject { |x| x =~ %r%^\s*/?\s*#% }
-    versioned_externals = externals.grep(/-r\d+\b/i)
-    unless versioned_externals.empty?
-      raise "Error: Found external(s) pegged to fixed revision: '#{versioned_externals.join ', '}' in '#{Dir.getwd}', don't know how to handle this."
-    end
-    externals.grep(%r%^/(\S+)\s+(\S+)%) { $~[1,2] }
+    externals = shell('git svn show-externals').reject { |x| x =~ /^\s*\/?\s*#/ }
+    externals.collect { |ext| ext.match(/\/?(\S+)\s+(-r\s?(\d+)\s+)?(\S+)/) }.compact
   end
-
-
-  # In quick mode, fake it by using "find"
-  def read_externals_quick
-    find_git_svn_sandboxes_in_current_dir.map {|x| [x, nil]}
-  end
-
 
   def find_git_svn_sandboxes_in_current_dir
     %x(find . -type d -name .git).split("\n").select {|x| File.exist?("#{x}/svn")}.grep(%r%^./(.+)/.git$%) {$~[1]}
@@ -288,6 +283,8 @@ class ExternalsProcessor
 
     relative_path = topdir_relative_path("#{Dir.getwd}/#{excludefile_path}")
     puts "Updating Git exclude list '#{relative_path}' with new item(s): #{new_exclude_lines.join(" ")}\n"
+    curr = Dir.getwd
+    puts "Error: exclude file does not exist: '#{excludefile_path}'. current dir: #{curr}" if !File.exist?(excludefile_path)
     File.open(excludefile_path, 'w') { |file| file << (exclude_lines + new_exclude_lines).map { |x| x + "\n" } }
   end
 
