@@ -198,6 +198,11 @@ class ExternalsProcessor
         restore_working_copy_branch
       end
     end
+    if @revision 
+      output = shell("git svn reset -r #{@revision}")
+      # TODO: error checking?
+      output = shell("git checkout remotes/git-svn")
+    end
   end
 
 
