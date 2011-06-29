@@ -190,7 +190,7 @@ class ExternalsProcessor
       check_working_copy_git
       check_working_copy_dirty
       check_working_copy_url
-      check_working_copy_branch
+      check_working_copy_branch unless @revision
 
       # All sanity checks OK, perform the update
       output = shell('git svn rebase', true, [/is up to date/, /First, rewinding/, /Fast-forwarded master/, /W: -empty_dir:/])
